@@ -1,0 +1,713 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>TechDroid Tournaments</title>
+    
+    <!-- Firebase SDKs -->
+    <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-auth-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-database-compat.js"></script>
+
+    <style>
+        :root {
+            --primary: #00e5ff;
+            --secondary: #7000ff;
+            --bg-dark: #090a0f;
+            --bg-card: #14161f;
+            --bg-nav: #1a1d29;
+            --text-main: #ffffff;
+            --text-muted: #8b9bb4;
+            --success: #00ff9d;
+            --danger: #ff2a6d;
+            --warning: #ffbd2e;
+        }
+
+        * { box-sizing: border-box; outline: none; -webkit-tap-highlight-color: transparent; }
+        body { margin: 0; font-family: 'Segoe UI', Roboto, sans-serif; background: var(--bg-dark); color: var(--text-main); font-size: 14px; padding-bottom: 70px; }
+        
+        /* Utils */
+        .hidden { display: none !important; }
+        .flex { display: flex; align-items: center; }
+        .flex-between { justify-content: space-between; }
+        .flex-center { justify-content: center; align-items: center; }
+        .flex-col { flex-direction: column; }
+        .text-center { text-align: center; }
+        .bold { font-weight: 600; }
+        .w-full { width: 100%; }
+        .mt-2 { margin-top: 0.5rem; }
+        .mb-2 { margin-bottom: 0.5rem; }
+        .mb-4 { margin-bottom: 1rem; }
+        .p-2 { padding: 10px; }
+
+        /* Auth Screen */
+        #auth-screen { position: fixed; top: 0; left: 0; width: 100%; height: 100vh; background: var(--bg-dark); z-index: 2000; display: flex; flex-direction: column; justify-content: center; padding: 30px; }
+        .auth-logo { font-size: 28px; font-weight: 800; color: var(--primary); text-transform: uppercase; margin-bottom: 10px; text-align: center; letter-spacing: 2px; }
+        .auth-toggle { text-align: center; margin-top: 20px; color: var(--text-muted); cursor: pointer; text-decoration: underline; }
+
+        /* Inputs & Buttons */
+        input, select { width: 100%; background: #0f111a; border: 1px solid #333; color: #fff; padding: 14px; border-radius: 8px; margin-bottom: 15px; font-size: 15px; }
+        input:focus { border-color: var(--primary); }
+        
+        .btn { border: none; padding: 14px; border-radius: 8px; cursor: pointer; font-weight: 700; font-size: 14px; text-transform: uppercase; letter-spacing: 0.5px; width: 100%; transition: 0.2s; }
+        .btn-primary { background: var(--primary); color: #000; box-shadow: 0 4px 15px rgba(0,229,255,0.3); }
+        .btn-primary:active { transform: scale(0.98); }
+        .btn-outline { background: transparent; border: 1px solid var(--primary); color: var(--primary); }
+        .btn-success { background: var(--success); color: #000; }
+        
+        /* Header */
+        .header { padding: 15px 20px; background: rgba(20, 22, 31, 0.95); backdrop-filter: blur(10px); position: sticky; top: 0; z-index: 100; border-bottom: 1px solid #2a2d3a; display: flex; justify-content: space-between; align-items: center; }
+        .app-name { font-weight: 800; font-size: 18px; color: #fff; }
+        .wallet-badge { background: rgba(0, 229, 255, 0.1); padding: 5px 10px; border-radius: 20px; color: var(--primary); font-weight: bold; font-size: 12px; display: flex; align-items: center; gap: 5px; cursor: pointer; }
+
+        /* Broadcast Ticker */
+        .broadcast-bar { background: rgba(255, 189, 46, 0.1); color: var(--warning); padding: 8px; font-size: 12px; display: none; overflow: hidden; white-space: nowrap; }
+        .marquee { display: inline-block; padding-left: 100%; animation: marquee 15s linear infinite; }
+        @keyframes marquee { 0% { transform: translate(0, 0); } 100% { transform: translate(-100%, 0); } }
+
+        /* Cards */
+        .card { background: var(--bg-card); border-radius: 12px; padding: 15px; margin-bottom: 15px; border: 1px solid #252836; position: relative; overflow: hidden; }
+        .card-img { width: 100%; height: 140px; object-fit: cover; border-radius: 8px; margin-bottom: 10px; background: #000; }
+        .card-tag { position: absolute; top: 15px; right: 15px; padding: 4px 8px; background: rgba(0,0,0,0.7); color: #fff; font-size: 10px; border-radius: 4px; font-weight: bold; backdrop-filter: blur(4px); }
+        
+        .t-title { font-size: 16px; font-weight: bold; margin-bottom: 5px; color: #fff; }
+        .t-info { display: flex; gap: 15px; font-size: 12px; color: var(--text-muted); margin-bottom: 12px; }
+        .t-meta { display: flex; align-items: center; gap: 4px; }
+
+        .progress-bar { width: 100%; height: 4px; background: #333; border-radius: 2px; margin: 10px 0; overflow: hidden; }
+        .progress-fill { height: 100%; background: var(--primary); }
+
+        /* Filters */
+        .filters { display: flex; gap: 10px; overflow-x: auto; padding: 10px 15px; scrollbar-width: none; }
+        .filter-pill { white-space: nowrap; padding: 6px 14px; background: #2a2d3a; border-radius: 20px; font-size: 12px; color: var(--text-muted); transition: 0.2s; }
+        .filter-pill.active { background: var(--primary); color: #000; font-weight: bold; }
+
+        /* Navigation */
+        .nav { position: fixed; bottom: 0; width: 100%; background: var(--bg-nav); display: flex; justify-content: space-around; padding: 10px 0; border-top: 1px solid #2a2d3a; z-index: 100; padding-bottom: max(10px, env(safe-area-inset-bottom)); }
+        .nav-item { color: #666; text-align: center; font-size: 10px; flex: 1; cursor: pointer; }
+        .nav-item.active { color: var(--primary); }
+        .nav-icon { font-size: 20px; display: block; margin-bottom: 2px; }
+
+        /* Modal */
+        .modal { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.9); z-index: 3000; display: none; align-items: flex-end; }
+        .modal.open { display: flex; }
+        .modal-content { background: #1a1d29; width: 100%; border-radius: 20px 20px 0 0; padding: 25px; max-height: 90vh; overflow-y: auto; animation: slideUp 0.3s ease; border-top: 1px solid var(--primary); }
+        @keyframes slideUp { from { transform: translateY(100%); } to { transform: translateY(0); } }
+
+        /* Wallet Specific */
+        .balance-card { background: linear-gradient(135deg, var(--secondary) 0%, #4a00e0 100%); color: white; padding: 25px; border-radius: 15px; text-align: center; margin-bottom: 20px; }
+        .balance-amt { font-size: 36px; font-weight: 800; margin: 10px 0; }
+        .qr-box { background: #fff; padding: 15px; border-radius: 8px; width: 180px; margin: 0 auto 15px auto; }
+        .qr-img { width: 100%; display: block; }
+        
+        .copy-box { background: #0f111a; padding: 10px; border-radius: 6px; display: flex; justify-content: space-between; align-items: center; border: 1px dashed #444; margin-bottom: 15px; font-family: monospace; }
+
+    </style>
+</head>
+<body>
+
+    <!-- AUTH SCREEN -->
+    <div id="auth-screen">
+        <div class="auth-logo">TECHDROID</div>
+        <p class="text-center" style="color:#888; margin-bottom:30px;">Premium Esports Platform</p>
+        
+        <form id="login-form" onsubmit="handleLogin(event)">
+            <input type="email" id="l-email" placeholder="Email Address" required>
+            <input type="password" id="l-pass" placeholder="Password" required>
+            <button class="btn btn-primary">LOGIN NOW</button>
+            <div class="auth-toggle" onclick="toggleAuth()">New Player? Create Account</div>
+        </form>
+
+        <form id="reg-form" class="hidden" onsubmit="handleSignup(event)">
+            <input type="text" id="r-name" placeholder="Full Name" required>
+            <input type="email" id="r-email" placeholder="Email Address" required>
+            <input type="password" id="r-pass" placeholder="Password (Min 6 chars)" required>
+            <button class="btn btn-primary">CREATE ACCOUNT</button>
+            <div class="auth-toggle" onclick="toggleAuth()">Already have an account? Login</div>
+        </form>
+        <p id="auth-msg" class="text-center mt-2" style="color:var(--danger)"></p>
+    </div>
+
+    <!-- MAIN APP -->
+    <div id="app" class="hidden">
+        
+        <!-- HEADER -->
+        <div class="header">
+            <div class="app-name">TECHDROID</div>
+            <div class="flex" style="gap:10px">
+                 <!-- Deep link donate button -->
+                <a id="donate-btn" href="#" class="btn btn-outline" style="padding:6px 12px; font-size:10px; text-decoration:none;">DONATE</a>
+                <div class="wallet-badge" onclick="switchTab('wallet')">
+                    <span>₹</span> <span id="header-bal">0</span>
+                </div>
+            </div>
+        </div>
+
+        <!-- BROADCAST -->
+        <div id="broadcast-box" class="broadcast-bar">
+            <span id="broadcast-text" class="marquee">Welcome to TechDroid Tournaments! Join matches to win big prizes.</span>
+        </div>
+
+        <!-- SECTIONS -->
+        
+        <!-- 1. HOME -->
+        <div id="tab-home" class="p-2">
+            <div class="filters">
+                <div class="filter-pill active" onclick="filterList('all', this)">All</div>
+                <div class="filter-pill" onclick="filterList('upcoming', this)">Upcoming</div>
+                <div class="filter-pill" onclick="filterList('live', this)">Live</div>
+                <div class="filter-pill" onclick="filterList('completed', this)">Results</div>
+            </div>
+
+            <div id="tourney-list" style="padding-top:10px;">
+                <!-- Tournaments injected here -->
+                <div class="text-center" style="margin-top:50px; color:#444;">Loading Tournaments...</div>
+            </div>
+        </div>
+
+        <!-- 2. MY MATCHES -->
+        <div id="tab-matches" class="p-2 hidden">
+            <h2 class="text-center mb-4">My Matches</h2>
+            <div id="my-list"></div>
+        </div>
+
+        <!-- 3. WALLET -->
+        <div id="tab-wallet" class="p-2 hidden">
+            <div class="balance-card">
+                <div>Total Balance</div>
+                <div class="balance-amt">₹<span id="wallet-bal">0</span></div>
+                <div style="font-size:12px; opacity:0.8">Play more, Win more!</div>
+            </div>
+
+            <div class="flex" style="gap:10px; margin-bottom:20px;">
+                <button class="btn btn-success" onclick="openAddMoney()">ADD MONEY</button>
+                <button class="btn btn-outline" onclick="openWithdraw()">WITHDRAW</button>
+            </div>
+
+            <h3 style="margin-bottom:10px;">Transaction History</h3>
+            <div id="tx-history" style="font-size:12px;">
+                <!-- Filled via JS -->
+            </div>
+        </div>
+
+        <!-- 4. PROFILE -->
+        <div id="tab-profile" class="p-2 hidden">
+            <div class="text-center mt-4">
+                <div style="width:80px; height:80px; background:#333; border-radius:50%; margin:0 auto 15px; display:flex; align-items:center; justify-content:center; font-size:30px;">👤</div>
+                <h3 id="profile-name">Player</h3>
+                <p id="profile-email" style="color:var(--text-muted)">...</p>
+                <button class="btn btn-danger mt-4" style="width:auto; padding:10px 30px;" onclick="logout()">LOGOUT</button>
+            </div>
+            
+            <div class="card mt-4">
+                <div class="t-title">Support & Help</div>
+                <p style="color:var(--text-muted); font-size:12px;">Need help? Contact Admin.</p>
+                <a href="#" id="support-link" class="btn btn-outline mt-2" style="text-align:center; text-decoration:none; display:block;">Chat on WhatsApp</a>
+            </div>
+        </div>
+
+    </div>
+
+    <!-- BOTTOM NAV -->
+    <div id="nav-bar" class="nav hidden">
+        <div class="nav-item active" onclick="switchTab('home', this)">
+            <span class="nav-icon">🏠</span>Home
+        </div>
+        <div class="nav-item" onclick="switchTab('matches', this)">
+            <span class="nav-icon">🎮</span>My Matches
+        </div>
+        <div class="nav-item" onclick="switchTab('wallet', this)">
+            <span class="nav-icon">💰</span>Wallet
+        </div>
+        <div class="nav-item" onclick="switchTab('profile', this)">
+            <span class="nav-icon">👤</span>Profile
+        </div>
+    </div>
+
+    <!-- MODALS -->
+
+    <!-- TOURNAMENT DETAILS MODAL -->
+    <div id="modal-tourney" class="modal">
+        <div class="modal-content">
+            <div class="flex flex-between">
+                <h2 id="m-title" style="margin:0">Details</h2>
+                <span onclick="closeModal('modal-tourney')" style="font-size:24px; cursor:pointer;">&times;</span>
+            </div>
+            <p id="m-subtitle" style="color:var(--primary); font-size:12px; margin-bottom:15px;"></p>
+            
+            <img id="m-banner" src="" style="width:100%; border-radius:8px; margin-bottom:15px;">
+            
+            <div class="flex flex-between" style="background:#0f111a; padding:15px; border-radius:8px; margin-bottom:15px;">
+                <div class="text-center">
+                    <div style="color:#888; font-size:11px;">ENTRY FEE</div>
+                    <div class="bold" style="color:var(--success); font-size:16px;" id="m-fee">FREE</div>
+                </div>
+                <div class="text-center">
+                    <div style="color:#888; font-size:11px;">TYPE</div>
+                    <div class="bold" id="m-type">SOLO</div>
+                </div>
+                <div class="text-center">
+                    <div style="color:#888; font-size:11px;">PRIZE</div>
+                    <div class="bold" style="color:var(--warning)" id="m-prize">0</div>
+                </div>
+            </div>
+
+            <div class="mb-4">
+                <div class="bold mb-2">Map & Rules</div>
+                <div id="m-rules" style="font-size:13px; color:#aaa; line-height:1.5; background:#222; padding:10px; border-radius:6px;"></div>
+            </div>
+
+            <button id="btn-join-action" class="btn btn-primary" onclick="initJoin()">JOIN TOURNAMENT</button>
+        </div>
+    </div>
+
+    <!-- JOIN FORM MODAL -->
+    <div id="modal-join" class="modal">
+        <div class="modal-content">
+            <h3>Join Match</h3>
+            <p class="text-muted" style="font-size:12px; margin-bottom:15px;">Enter your in-game details correctly.</p>
+            
+            <input type="hidden" id="join-tid">
+            <input type="text" id="join-ign" placeholder="Exact In-Game Name" required>
+            <input type="text" id="join-uid" placeholder="Game Character ID (UID)" required>
+            <input type="text" id="join-team" placeholder="Team Name (Optional for Solo)">
+            
+            <div class="flex flex-between" style="margin-bottom:15px; font-size:13px;">
+                <span>Wallet Balance:</span>
+                <span style="color:var(--primary)" id="join-bal">₹0</span>
+            </div>
+            
+            <button class="btn btn-success" onclick="confirmJoin()">CONFIRM & PAY</button>
+            <button class="btn btn-outline mt-2" onclick="closeModal('modal-join')">CANCEL</button>
+        </div>
+    </div>
+
+    <!-- ADD MONEY MODAL -->
+    <div id="modal-add" class="modal">
+        <div class="modal-content">
+            <h3>Add Money to Wallet</h3>
+            <p style="font-size:12px; color:#aaa;">Min Amount: ₹1</p>
+            
+            <div class="qr-box">
+                <img id="upi-qr" class="qr-img" src="" alt="QR Code">
+            </div>
+            <div class="text-center" style="font-size:11px; margin-bottom:10px; color:#aaa;">Scan to Pay</div>
+
+            <div class="copy-box">
+                <span id="admin-upi" style="font-size:12px; color:#fff;">Loading ID...</span>
+                <button style="background:none; border:none; color:var(--primary); font-size:12px;" onclick="copyUpi()">COPY</button>
+            </div>
+
+            <label class="bold" style="font-size:12px;">Step 1: Make Payment</label>
+            <label class="bold" style="font-size:12px; margin-top:10px; display:block;">Step 2: Enter Details</label>
+            
+            <input type="number" id="dep-amt" placeholder="Amount Paid (e.g. 50)" style="margin-top:5px;">
+            <input type="text" id="dep-utr" placeholder="UTR / Transaction ID (12 Digits)">
+            
+            <button class="btn btn-primary" onclick="submitDeposit()">SUBMIT REQUEST</button>
+            <button class="btn text-muted mt-2" style="background:none; width:100%" onclick="closeModal('modal-add')">Close</button>
+        </div>
+    </div>
+
+    <!-- WITHDRAW MODAL -->
+    <div id="modal-withdraw" class="modal">
+        <div class="modal-content">
+            <h3>Withdraw Winnings</h3>
+            <p style="font-size:12px; color:#aaa;">Min Withdraw: ₹10</p>
+            
+            <input type="number" id="wd-amt" placeholder="Amount (Max: Balance)">
+            <input type="text" id="wd-upi" placeholder="Your UPI ID (e.g. 9876543210@ybl)">
+            
+            <button class="btn btn-primary" onclick="submitWithdraw()">REQUEST WITHDRAWAL</button>
+            <button class="btn text-muted mt-2" style="background:none; width:100%" onclick="closeModal('modal-withdraw')">Close</button>
+        </div>
+    </div>
+
+    <script>
+        // ---------------- CONFIGURATION ----------------
+        // PASTE YOUR FIREBASE CONFIG HERE
+        const firebaseConfig = {
+  apiKey: "AIzaSyCh8H1LjPolguQpZhhZpaKOu3O3jI1SPCo",
+  authDomain: "rahulji-66791.firebaseapp.com",
+  databaseURL: "https://rahulji-66791-default-rtdb.firebaseio.com",
+  projectId: "rahulji-66791",
+  storageBucket: "rahulji-66791.firebasestorage.app",
+  messagingSenderId: "205292087945",
+  appId: "1:205292087945:web:c74a241c3846fa29e4b458"
+};
+
+        firebase.initializeApp(firebaseConfig);
+        const auth = firebase.auth();
+        const db = firebase.database();
+
+        // ---------------- STATE ----------------
+        let user = null;
+        let userData = {};
+        let tournaments = [];
+        let settings = {};
+
+        // ---------------- AUTHENTICATION ----------------
+        auth.onAuthStateChanged((u) => {
+            if (u) {
+                user = u;
+                document.getElementById('auth-screen').classList.add('hidden');
+                document.getElementById('app').classList.remove('hidden');
+                document.getElementById('nav-bar').classList.remove('hidden');
+                initApp();
+            } else {
+                document.getElementById('auth-screen').classList.remove('hidden');
+                document.getElementById('app').classList.add('hidden');
+                document.getElementById('nav-bar').classList.add('hidden');
+            }
+        });
+
+        function toggleAuth() {
+            document.getElementById('login-form').classList.toggle('hidden');
+            document.getElementById('reg-form').classList.toggle('hidden');
+        }
+
+        function handleLogin(e) {
+            e.preventDefault();
+            const em = document.getElementById('l-email').value;
+            const pw = document.getElementById('l-pass').value;
+            auth.signInWithEmailAndPassword(em, pw).catch(err => showAuthError(err.message));
+        }
+
+        function handleSignup(e) {
+            e.preventDefault();
+            const nm = document.getElementById('r-name').value;
+            const em = document.getElementById('r-email').value;
+            const pw = document.getElementById('r-pass').value;
+            
+            auth.createUserWithEmailAndPassword(em, pw).then((res) => {
+                // Create user profile in DB
+                db.ref('users/' + res.user.uid).set({
+                    email: em,
+                    name: nm,
+                    balance: 0,
+                    createdAt: firebase.database.ServerValue.TIMESTAMP
+                });
+            }).catch(err => showAuthError(err.message));
+        }
+
+        function showAuthError(msg) {
+            document.getElementById('auth-msg').innerText = msg;
+        }
+
+        function logout() {
+            auth.signOut();
+            window.location.reload();
+        }
+
+        // ---------------- APP LOGIC ----------------
+        function initApp() {
+            listenUserData();
+            listenTournaments();
+            listenSettings();
+            listenBroadcast();
+        }
+
+        // Listen for Wallet Balance & Profile
+        function listenUserData() {
+            db.ref('users/' + user.uid).on('value', snap => {
+                userData = snap.val() || {};
+                const bal = userData.balance || 0;
+                
+                // Update UI
+                document.getElementById('header-bal').innerText = bal;
+                document.getElementById('wallet-bal').innerText = bal;
+                document.getElementById('join-bal').innerText = '₹' + bal;
+                document.getElementById('profile-name').innerText = userData.name || 'Player';
+                document.getElementById('profile-email').innerText = user.email;
+            });
+
+            // Transaction History (Deposits + Withdrawals merged)
+            // Ideally we'd have a separate transaction log, but here we query deposits/withdraws
+            loadHistory(); 
+        }
+
+        function loadHistory() {
+            // Simple approach: listen to user's deposits
+            db.ref('deposits').orderByChild('userId').equalTo(user.uid).limitToLast(10).on('value', snap => {
+                const list = document.getElementById('tx-history');
+                list.innerHTML = '';
+                const data = snap.val();
+                if(data) {
+                    Object.values(data).forEach(d => {
+                        let color = d.status === 'approved' ? 'var(--success)' : (d.status==='rejected'?'var(--danger)':'var(--warning)');
+                        list.innerHTML += `
+                        <div class="card" style="padding:10px; margin-bottom:8px; display:flex; justify-content:space-between; align-items:center;">
+                            <div>
+                                <div class="bold">Deposit ₹${d.amount}</div>
+                                <div style="font-size:10px; color:#888;">UTR: ${d.utr}</div>
+                            </div>
+                            <div style="font-size:10px; font-weight:bold; color:${color}; text-transform:uppercase;">${d.status}</div>
+                        </div>`;
+                    });
+                }
+            });
+        }
+
+        function listenSettings() {
+            db.ref('settings').on('value', snap => {
+                settings = snap.val() || {};
+                if(settings.upiId) {
+                    // Update Donate Button
+                    const link = `upi://pay?pa=${settings.upiId}&pn=${encodeURIComponent(settings.merchantName||'App')}&cu=INR`;
+                    document.getElementById('donate-btn').href = link;
+                    document.getElementById('admin-upi').innerText = settings.upiId;
+                    
+                    // Generate QR for Add Money
+                    document.getElementById('upi-qr').src = `https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${encodeURIComponent(link)}`;
+                }
+                if(settings.supportContact) {
+                    document.getElementById('support-link').href = settings.supportContact.includes('http') ? settings.supportContact : `https://wa.me/${settings.supportContact}`;
+                }
+            });
+        }
+
+        function listenBroadcast() {
+            db.ref('broadcasts').limitToLast(1).on('child_added', snap => {
+                const msg = snap.val().message;
+                const box = document.getElementById('broadcast-box');
+                document.getElementById('broadcast-text').innerText = msg;
+                box.style.display = 'block';
+            });
+        }
+
+        // ---------------- TOURNAMENTS ----------------
+        function listenTournaments() {
+            db.ref('tournaments').on('value', snap => {
+                const data = snap.val();
+                tournaments = [];
+                if(data) {
+                    Object.keys(data).forEach(k => tournaments.push({id:k, ...data[k]}));
+                    tournaments.sort((a,b) => new Date(b.startTime) - new Date(a.startTime)); // Newest first
+                }
+                renderTournaments(tournaments);
+                renderMyMatches();
+            });
+        }
+
+        function renderTournaments(list) {
+            const container = document.getElementById('tourney-list');
+            container.innerHTML = '';
+            
+            list.forEach(t => {
+                const isLive = t.status === 'live';
+                const statusColor = isLive ? 'var(--danger)' : (t.status === 'completed' ? 'var(--success)' : 'var(--warning)');
+                
+                container.innerHTML += `
+                <div class="card" onclick="openTourney('${t.id}')">
+                    <div class="card-tag" style="background:${statusColor}">${t.status ? t.status.toUpperCase() : 'UPCOMING'}</div>
+                    <img src="${t.banner}" class="card-img">
+                    <div class="t-title">${t.title}</div>
+                    <div class="t-info">
+                        <span>${new Date(t.startTime).toLocaleString()}</span>
+                        <span>•</span>
+                        <span style="color:var(--primary)">${t.gameMode}</span>
+                    </div>
+                    <div class="flex flex-between" style="border-top:1px solid #222; padding-top:10px;">
+                        <div class="bold" style="color:var(--success)">₹${t.entryFee === 0 ? 'FREE' : t.entryFee}</div>
+                        <div style="font-size:11px; color:#aaa;">Prize: ${t.prizePool}</div>
+                        <button class="btn btn-primary" style="width:auto; padding:5px 15px; font-size:10px;">VIEW</button>
+                    </div>
+                </div>`;
+            });
+        }
+
+        function filterList(type, el) {
+            document.querySelectorAll('.filter-pill').forEach(p => p.classList.remove('active'));
+            el.classList.add('active');
+            
+            if(type === 'all') renderTournaments(tournaments);
+            else renderTournaments(tournaments.filter(t => t.status === type));
+        }
+
+        // ---------------- JOINING ----------------
+        let curTourney = null;
+
+        function openTourney(tid) {
+            curTourney = tournaments.find(t => t.id === tid);
+            if(!curTourney) return;
+
+            document.getElementById('m-title').innerText = curTourney.title;
+            document.getElementById('m-subtitle').innerText = `${curTourney.gameMode} • ${curTourney.type} • ${new Date(curTourney.startTime).toLocaleString()}`;
+            document.getElementById('m-banner').src = curTourney.banner;
+            document.getElementById('m-fee').innerText = curTourney.entryFee === 0 ? 'FREE' : '₹'+curTourney.entryFee;
+            document.getElementById('m-type').innerText = curTourney.type.toUpperCase();
+            document.getElementById('m-prize').innerText = curTourney.prizePool;
+            document.getElementById('m-rules').innerText = curTourney.rules || 'No specific rules.';
+            document.getElementById('btn-join-action').innerText = curTourney.status === 'live' ? 'SPECTATE / JOIN' : (curTourney.status==='completed'?'VIEW RESULTS':'JOIN TOURNAMENT');
+            
+            // Check if already registered
+            db.ref(`registrations/${tid}/${user.uid}`).once('value', snap => {
+                if(snap.exists()) {
+                    document.getElementById('btn-join-action').innerText = "ALREADY REGISTERED";
+                    document.getElementById('btn-join-action').disabled = true;
+                } else {
+                    document.getElementById('btn-join-action').disabled = false;
+                }
+                document.getElementById('modal-tourney').classList.add('open');
+            });
+        }
+
+        function initJoin() {
+            if(curTourney.status !== 'upcoming') return; // Can't join live/ended
+            closeModal('modal-tourney');
+            
+            document.getElementById('join-tid').value = curTourney.id;
+            document.getElementById('modal-join').classList.add('open');
+        }
+
+        function confirmJoin() {
+            const tid = document.getElementById('join-tid').value;
+            const ign = document.getElementById('join-ign').value;
+            const uid = document.getElementById('join-uid').value;
+            const team = document.getElementById('join-team').value;
+
+            if(!ign || !uid) return alert('Please fill all details');
+            
+            const fee = curTourney.entryFee;
+            const myBal = userData.balance || 0;
+
+            if(fee > 0 && myBal < fee) {
+                alert('Insufficient Balance! Please Add Money.');
+                closeModal('modal-join');
+                switchTab('wallet');
+                return;
+            }
+
+            // Deduct & Register
+            if(fee > 0) {
+                db.ref('users/' + user.uid + '/balance').set(myBal - fee);
+            }
+
+            const regData = {
+                gameName: ign,
+                gameUid: uid,
+                teamName: team,
+                userId: user.uid,
+                paid: true,
+                timestamp: firebase.database.ServerValue.TIMESTAMP
+            };
+
+            db.ref('registrations/' + tid + '/' + user.uid).set(regData).then(() => {
+                alert('Successfully Joined!');
+                closeModal('modal-join');
+                switchTab('matches');
+            });
+        }
+
+        // ---------------- MY MATCHES ----------------
+        function renderMyMatches() {
+            // Find all tourneys where user is registered
+            // For optimized approach, we should store user's registrations under /users/{uid}/registrations
+            // But here we scan tourneys and check registrations (less efficient but works for small scale)
+            const list = document.getElementById('my-list');
+            list.innerHTML = '';
+            
+            // This part is tricky in NoSQL without index. 
+            // We'll iterate all tourneys and check client-side for simplicity in single-file
+            
+            tournaments.forEach(t => {
+                db.ref(`registrations/${t.id}/${user.uid}`).once('value', snap => {
+                    if(snap.exists()) {
+                        const r = snap.val();
+                        const isRoomVisible = (t.status === 'live' || (t.status === 'upcoming' && t.roomId)); // Logic: Show room if admin added it
+                        
+                        let roomHtml = '';
+                        if(isRoomVisible && t.roomId) {
+                            roomHtml = `
+                            <div style="background:#222; padding:10px; margin-top:10px; border-radius:6px; border:1px dashed var(--success);">
+                                <div style="color:var(--success); font-weight:bold;">ROOM ID: ${t.roomId}</div>
+                                <div style="color:#fff;">PASS: ${t.roomPass}</div>
+                            </div>`;
+                        } else if(t.status === 'upcoming') {
+                            roomHtml = `<div style="font-size:11px; color:#666; margin-top:5px;">Room details will appear here 15 mins before match.</div>`;
+                        }
+
+                        list.innerHTML += `
+                        <div class="card">
+                            <div class="flex flex-between">
+                                <div class="bold">${t.title}</div>
+                                <div class="status-badge" style="color:var(--primary)">REGISTERED</div>
+                            </div>
+                            <div style="font-size:12px; color:#888;">${new Date(t.startTime).toLocaleString()}</div>
+                            ${roomHtml}
+                        </div>`;
+                    }
+                });
+            });
+        }
+
+        // ---------------- WALLET OPS ----------------
+        function openAddMoney() { document.getElementById('modal-add').classList.add('open'); }
+        function openWithdraw() { document.getElementById('modal-withdraw').classList.add('open'); }
+        
+        function copyUpi() {
+            navigator.clipboard.writeText(settings.upiId);
+            alert('UPI ID Copied!');
+        }
+
+        function submitDeposit() {
+            const amt = parseInt(document.getElementById('dep-amt').value);
+            const utr = document.getElementById('dep-utr').value;
+            
+            if(amt < 1) return alert('Min deposit is ₹1');
+            if(!utr || utr.length < 4) return alert('Invalid UTR');
+
+            db.ref('deposits').push({
+                userId: user.uid,
+                userEmail: user.email,
+                amount: amt,
+                utr: utr,
+                status: 'pending',
+                timestamp: firebase.database.ServerValue.TIMESTAMP
+            });
+            
+            alert('Deposit Request Submitted! Balance will update after Admin verification.');
+            closeModal('modal-add');
+        }
+
+        function submitWithdraw() {
+            const amt = parseInt(document.getElementById('wd-amt').value);
+            const upi = document.getElementById('wd-upi').value;
+            const bal = userData.balance || 0;
+
+            if(amt < 10) return alert('Min withdraw is ₹10');
+            if(amt > bal) return alert('Insufficient Balance');
+            if(!upi.includes('@')) return alert('Invalid UPI ID');
+
+            // Deduct first
+            db.ref('users/' + user.uid + '/balance').set(bal - amt);
+            
+            db.ref('withdrawals').push({
+                userId: user.uid,
+                userEmail: user.email,
+                amount: amt,
+                upiId: upi,
+                status: 'pending',
+                timestamp: firebase.database.ServerValue.TIMESTAMP
+            });
+
+            alert('Withdrawal Requested.');
+            closeModal('modal-withdraw');
+        }
+
+        // ---------------- UTILS ----------------
+        function switchTab(id, el) {
+            ['home','matches','wallet','profile'].forEach(t => document.getElementById('tab-'+t).classList.add('hidden'));
+            document.getElementById('tab-'+id).classList.remove('hidden');
+            
+            if(el) {
+                document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
+                el.classList.add('active');
+            }
+        }
+        function closeModal(id) { document.getElementById(id).classList.remove('open'); }
+
+    </script>
+</body>
+</html>
